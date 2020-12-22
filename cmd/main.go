@@ -17,11 +17,19 @@ const (
 )
 
 type Metrics struct {
-	calls prometheus.Counter
+	calls        prometheus.Counter
+	duration     prometheus.Histogram
+	lastDuration prometheus.Gauge
 }
 
 var metrics = &Metrics{
 	calls: promauto.NewCounter(prometheus.CounterOpts{Namespace: system, Name: "superjob_calls"}),
+	duration: promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: system,
+		Name:      "superjob_duration",
+		Buckets:   []float64{.005, .01, .02, .03, .05, .1, .15, .95},
+	}),
+	lastDuration: promauto.NewGauge(prometheus.GaugeOpts{Namespace: system, Name: "superjob_last_duration"}),
 }
 
 func main() {
@@ -30,9 +38,14 @@ func main() {
 	http.ListenAndServe(listen, nil)
 }
 
-// TODO measure me
 func superhandler(w http.ResponseWriter, r *http.Request) {
 	metrics.calls.Add(1)
+	timer := prometheus.NewTimer(metrics.duration)
+	defer func() {
+		dur := timer.ObserveDuration()
+		metrics.lastDuration.Set(dur.Seconds())
+	}()
+
 	size := rand.Int31n(max)
 	slice := make([]int, size)
 	for idx := range slice {
