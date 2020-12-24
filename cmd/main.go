@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -16,34 +16,29 @@ const (
 	system = "myapp"
 )
 
-type Metrics struct {
-	calls        prometheus.Counter
-	duration     prometheus.Histogram
-	lastDuration prometheus.Gauge
-}
-
-var metrics = &Metrics{
-	calls: promauto.NewCounter(prometheus.CounterOpts{Namespace: system, Name: "superjob_calls"}),
-	duration: promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: system,
-		Name:      "superjob_duration",
-		Buckets:   []float64{.005, .01, .02, .03, .05, .1, .15, .95},
-	}),
-	lastDuration: promauto.NewGauge(prometheus.GaugeOpts{Namespace: system, Name: "superjob_last_duration"}),
+type Handler struct {
+	metrics *Metrics
 }
 
 func main() {
+	h := &Handler{metrics: NewMetrics()}
+	prometheus.MustRegister(h.metrics.calls, h.metrics.duration, h.metrics.durationSum, h.metrics.lastDuration)
+
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/superjob", superhandler)
+	http.HandleFunc("/superjob", h.superhandler)
 	http.ListenAndServe(listen, nil)
 }
 
-func superhandler(w http.ResponseWriter, r *http.Request) {
-	metrics.calls.Add(1)
-	timer := prometheus.NewTimer(metrics.duration)
+func (h *Handler) superhandler(w http.ResponseWriter, r *http.Request) {
+	t := time.Now()
+
 	defer func() {
-		dur := timer.ObserveDuration()
-		metrics.lastDuration.Set(dur.Seconds())
+		delta := time.Since(t)
+
+		h.metrics.calls.Inc()
+		h.metrics.duration.Observe(delta.Seconds())
+		h.metrics.durationSum.Observe(delta.Seconds())
+		h.metrics.lastDuration.Set(delta.Seconds())
 	}()
 
 	size := rand.Int31n(max)
