@@ -16,7 +16,13 @@ const (
 
 func main() {
 	metrics := superhandler.NewMetrics(system, name)
-	prometheus.MustRegister(metrics.Calls, metrics.Duration, metrics.DurationSum, metrics.LastDuration)
+	prometheus.MustRegister(
+		metrics.Calls,
+		metrics.Duration,
+		metrics.DurationSum,
+		metrics.LastDuration,
+		metrics.SummaryVec,
+	)
 
 	h := superhandler.New(metrics)
 

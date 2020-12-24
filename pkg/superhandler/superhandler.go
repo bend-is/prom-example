@@ -2,6 +2,7 @@ package superhandler
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"math/rand"
 	"net/http"
 	"time"
@@ -20,9 +21,9 @@ func New(metrics *Metrics) *Handler {
 }
 
 func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
-	if h.metrics != nil {
-		t := time.Now()
+	t := time.Now()
 
+	if h.metrics != nil {
 		defer func() {
 			delta := time.Since(t)
 
@@ -30,14 +31,25 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 			h.metrics.Duration.Observe(delta.Seconds())
 			h.metrics.DurationSum.Observe(delta.Seconds())
 			h.metrics.LastDuration.Set(delta.Seconds())
+			h.metrics.SummaryVec.With(prometheus.Labels{metricLabel: "handle_end"}).Observe(delta.Seconds())
 		}()
 	}
 
 	size := rand.Int31n(max)
 	slice := make([]int, size)
+
+	if h.metrics != nil {
+		h.metrics.SummaryVec.With(prometheus.Labels{metricLabel: "handle_preallocate"}).Observe(time.Since(t).Seconds())
+	}
+
 	for idx := range slice {
 		slice[idx] = rand.Intn(max)
 	}
+
+	if h.metrics != nil {
+		h.metrics.SummaryVec.With(prometheus.Labels{metricLabel: "handle_allocate"}).Observe(time.Since(t).Seconds())
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("Len %d", len(slice))))
 }

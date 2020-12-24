@@ -4,11 +4,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const metricLabel = "operation"
+
 type Metrics struct {
 	Calls        prometheus.Counter
 	Duration     prometheus.Histogram
 	DurationSum  prometheus.Summary
 	LastDuration prometheus.Gauge
+	SummaryVec   *prometheus.SummaryVec
 }
 
 func NewMetrics(namespace, name string) *Metrics {
@@ -35,5 +38,11 @@ func NewMetrics(namespace, name string) *Metrics {
 			Name:      name,
 			Subsystem: "last_duration",
 		}),
+		SummaryVec: prometheus.NewSummaryVec(prometheus.SummaryOpts{
+			Namespace:  namespace,
+			Name:       name,
+			Subsystem:  "duration_summary_vec",
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		}, []string{metricLabel}),
 	}
 }
